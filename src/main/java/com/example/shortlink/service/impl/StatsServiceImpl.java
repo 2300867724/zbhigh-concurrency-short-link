@@ -137,8 +137,7 @@ public class StatsServiceImpl implements StatsService {
         // 今日 DAU
         long todayDau = 0;
         try {
-            Long bitCount = redisTemplate.opsForValue()
-                    .bitCount(dauKey(today));
+            Long bitCount = bitCount(dauKey(today));
             if (bitCount != null) todayDau = bitCount;
         } catch (Exception e) {
             log.warn("Redis 查询 DAU 异常: {}", e.getMessage());
