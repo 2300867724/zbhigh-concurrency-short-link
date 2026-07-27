@@ -1,5 +1,6 @@
 package com.example.shortlink.config;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.shortlink.entity.ShortLink;
 import com.example.shortlink.mapper.ShortLinkMapper;
 import com.google.common.hash.BloomFilter;
@@ -90,9 +91,9 @@ public class BloomFilterConfig {
             long loaded = 0;
 
             for (int page = 1; page <= pages; page++) {
-                List<ShortLink> batch = shortLinkMapper.selectList(
-                        new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(page, pageSize)
-                );
+                Page<ShortLink> p = shortLinkMapper.selectPage(
+                        new Page<>(page, pageSize), null);
+                List<ShortLink> batch = p.getRecords();
                 for (ShortLink sl : batch) {
                     if (sl.getShortCode() != null && !sl.getShortCode().isEmpty()) {
                         bloomFilter.put(sl.getShortCode());

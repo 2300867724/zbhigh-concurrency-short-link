@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS t_short_link (
     CONSTRAINT uk_short_code UNIQUE (short_code)
 );
 
-CREATE INDEX idx_original_url ON t_short_link(original_url(255));
+-- H2 不支持前缀索引，直接建完整索引（MySQL 用 schema-mysql.sql 里的前缀索引）
+CREATE INDEX idx_original_url ON t_short_link(original_url);
 
 -- ==================== 访问统计表 ====================
 CREATE TABLE IF NOT EXISTS t_access_stats (

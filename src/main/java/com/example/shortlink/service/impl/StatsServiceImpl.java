@@ -72,7 +72,8 @@ public class StatsServiceImpl implements StatsService {
             redisTemplate.expire(uvKey(shortCode, today), STATS_TTL);
 
             // 3. DAU 标记（Bitmap，IP hash → offset）
-            int offset = Math.abs(visitorIp.hashCode()) % DAU_BITMAP_SIZE;
+            // 用 & Integer.MAX_VALUE 清符号位，避免 Math.abs(Integer.MIN_VALUE) 返回负数
+            int offset = (visitorIp.hashCode() & Integer.MAX_VALUE) % DAU_BITMAP_SIZE;
             redisTemplate.opsForValue().setBit(dauKey(today), offset, true);
             redisTemplate.expire(dauKey(today), STATS_TTL);
 

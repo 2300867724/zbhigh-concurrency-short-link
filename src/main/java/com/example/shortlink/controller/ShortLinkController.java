@@ -44,6 +44,12 @@ public class ShortLinkController {
                     .body(Map.of("success", false, "message", "URL 必须以 http:// 或 https:// 开头"));
         }
 
+        // URL 长度校验
+        if (url.length() > 2048) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "URL 长度不能超过 2048 字符"));
+        }
+
         try {
             ShortLink shortLink = shortLinkService.shorten(url);
             return ResponseEntity.ok(Map.of(
@@ -52,6 +58,10 @@ public class ShortLinkController {
                     "shortUrl", "http://localhost:8080/" + shortLink.getShortCode(),
                     "originalUrl", shortLink.getOriginalUrl()
             ));
+        } catch (IllegalArgumentException e) {
+            log.warn("请求参数不合法: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", e.getMessage()));
         } catch (Exception e) {
             log.error("生成短链接失败: {}", url, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

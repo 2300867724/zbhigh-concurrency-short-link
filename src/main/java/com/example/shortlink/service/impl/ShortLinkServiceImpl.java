@@ -13,6 +13,7 @@ import com.google.common.hash.BloomFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -78,7 +79,7 @@ public class ShortLinkServiceImpl implements ShortLinkService {
         }
 
         // ── 2. 分布式锁：按 URL 粒度串行化（防止并发重复创建） ──
-        String lockKey = "url:" + Math.abs(originalUrl.hashCode());
+        String lockKey = "url:" + Integer.toUnsignedString(originalUrl.hashCode());
         RedisDistributedLock.LockToken lockToken = distributedLock.tryLock(lockKey);
         if (lockToken == null) {
             throw new RuntimeException("系统繁忙，请稍后重试");
@@ -96,21 +97,33 @@ public class ShortLinkServiceImpl implements ShortLinkService {
                 return existing;
             }
 
-            // ── 4. 雪花 ID → Base62 → 碰撞检测 → 短码 ──
-            String shortCode = generateUniqueShortCode();
-
-            // ── 5. 写入 MySQL（主存储） ──
+            // ── 4. 雪花 ID → Base62 → INSERT（含 DuplicateKeyException 重试） ──
             ShortLink entity = new ShortLink();
-            entity.setShortCode(shortCode);
             entity.setOriginalUrl(originalUrl);
             entity.setCreateTime(LocalDateTime.now());
             entity.setVisitCount(0L);
-            shortLinkMapper.insert(entity);
 
-            // ── 6. 写入 Redis（缓存层） ──
+            String shortCode = null;
+            int insertRetries = 3;
+            for (int attempt = 0; attempt < insertRetries; attempt++) {
+                shortCode = generateUniqueShortCode();
+                entity.setShortCode(shortCode);
+                try {
+                    shortLinkMapper.insert(entity);
+                    break;
+                } catch (DuplicateKeyException e) {
+                    if (attempt == insertRetries - 1) {
+                        throw new RuntimeException("短码写入冲突，请重试", e);
+                    }
+                    log.warn("短码 INSERT 唯一键冲突（极低概率），重试 {}/{}: {}",
+                            attempt + 1, insertRetries, shortCode);
+                }
+            }
+
+            // ── 5. 写入 Redis（缓存层） ──
             writeToRedis(shortCode, originalUrl);
 
-            // ── 7. 加入 Bloom Filter ──
+            // ── 6. 加入 Bloom Filter ──
             bloomFilter.put(shortCode);
 
             log.info("生成短链接: {} -> {}", originalUrl, shortCode);
