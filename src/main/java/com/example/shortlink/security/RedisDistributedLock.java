@@ -77,11 +77,17 @@ public class RedisDistributedLock {
         long deadline = System.currentTimeMillis() + WAIT_TIMEOUT * 1000;
 
         while (System.currentTimeMillis() < deadline) {
-            Boolean success = redisTemplate.opsForValue()
-                    .setIfAbsent(key, value, Duration.ofSeconds(LOCK_TIMEOUT));
-            if (Boolean.TRUE.equals(success)) {
-                log.debug("获取锁成功: key={}", lockKey);
-                return new LockToken(key, value);
+            try {
+                Boolean success = redisTemplate.opsForValue()
+                        .setIfAbsent(key, value, Duration.ofSeconds(LOCK_TIMEOUT));
+                if (Boolean.TRUE.equals(success)) {
+                    log.debug("获取锁成功: key={}", lockKey);
+                    return new LockToken(key, value);
+                }
+            } catch (Exception e) {
+                // Redis 不可用时降级：跳过分布式锁，继续执行
+                log.warn("Redis 连接失败，分布式锁降级跳过: {}", e.getMessage());
+                return new LockToken(key, null);  // null value 表示"无锁模式"
             }
             // 自旋等待 50ms 后重试
             try {
@@ -100,7 +106,7 @@ public class RedisDistributedLock {
      * 释放分布式锁（仅当 token 匹配时）。
      */
     public void unlock(LockToken token) {
-        if (token == null) return;
+        if (token == null || token.value == null) return;  // null value = Redis 降级模式
         try {
             redisTemplate.execute(
                     UNLOCK_SCRIPT,

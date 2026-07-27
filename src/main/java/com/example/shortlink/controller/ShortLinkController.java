@@ -73,7 +73,7 @@ public class ShortLinkController {
      * 短链接重定向
      * GET /{短码} → 302 重定向到原始链接
      */
-    @GetMapping("/{shortCode}")
+    @GetMapping("/{shortCode:[a-zA-Z0-9]{1,10}}")
     public ResponseEntity<Void> redirect(@PathVariable String shortCode,
                                           HttpServletRequest request) {
         ShortLink shortLink = shortLinkService.getByShortCode(shortCode);
