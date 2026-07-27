@@ -26,7 +26,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         String ip = extractIp(request);
 
         if (!rateLimiter.allow(ip)) {
-            response.setStatus(HttpStatus.TOOO_MANY_REQUESTS.value());
+            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write(
                     "{\"success\":false,\"message\":\"请求过于频繁，请稍后再试\"}"

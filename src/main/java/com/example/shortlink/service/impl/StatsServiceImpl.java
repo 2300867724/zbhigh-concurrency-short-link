@@ -10,6 +10,7 @@ import com.example.shortlink.mapper.ShortLinkMapper;
 import com.example.shortlink.service.StatsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -267,7 +268,7 @@ public class StatsServiceImpl implements StatsService {
             }
 
             // 全局 DAU
-            Long dauCount = redisTemplate.opsForValue().bitCount(dauKey(today));
+            Long dauCount = bitCount(dauKey(today));
             long dau = dauCount != null ? dauCount : 0;
 
             // Upsert 每日全局统计
@@ -352,7 +353,7 @@ public class StatsServiceImpl implements StatsService {
 
     private long countTodayDau(String dateStr) {
         try {
-            Long bitCount = redisTemplate.opsForValue().bitCount(dauKey(dateStr));
+            Long bitCount = bitCount(dauKey(dateStr));
             return bitCount != null ? bitCount : 0;
         } catch (Exception e) { return 0; }
     }
@@ -377,6 +378,24 @@ public class StatsServiceImpl implements StatsService {
 
     private String activeLinksKey(String date) {
         return "active_links:" + date;
+    }
+
+    // ==================== Redis BITCOUNT 封装 ====================
+
+    /**
+     * Redis BITCOUNT —— ValueOperations 上没有此方法，
+     * 需要通过 {@link RedisCallback} 底层连接执行。
+     */
+    private Long bitCount(String key) {
+        try {
+            return redisTemplate.execute(
+                    (RedisCallback<Long>) connection ->
+                            connection.bitCount(key.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            );
+        } catch (Exception e) {
+            log.warn("BITCOUNT 异常: {}", e.getMessage());
+            return 0L;
+        }
     }
 
     // ==================== 内部辅助类 ====================

@@ -54,7 +54,7 @@ public class RedisDistributedLock {
     static {
         UNLOCK_SCRIPT = new DefaultRedisScript<>();
         UNLOCK_SCRIPT.setResultType(Long.class);
-        UNLOCK_SCRIPT.setScript("""
+        UNLOCK_SCRIPT.setScriptText("""
             if redis.call('GET', KEYS[1]) == ARGV[1] then
                 return redis.call('DEL', KEYS[1])
             else

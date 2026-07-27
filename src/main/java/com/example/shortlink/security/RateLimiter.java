@@ -44,7 +44,7 @@ public class RateLimiter {
     static {
         LEAKY_BUCKET_SCRIPT = new DefaultRedisScript<>();
         LEAKY_BUCKET_SCRIPT.setResultType(Long.class);
-        LEAKY_BUCKET_SCRIPT.setScript("""
+        LEAKY_BUCKET_SCRIPT.setScriptText("""
             local key       = KEYS[1]
             local capacity  = tonumber(ARGV[1])   -- 桶容量
             local leak_rate = tonumber(ARGV[2])   -- 泄漏速率（滴/秒）
