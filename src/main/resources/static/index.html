@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>短链接服务平台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 导航栏 -->
+        <nav class="top-nav">
+            <a href="/" class="nav-brand">🔗 短链接</a>
+            <a href="/" style="color:#fff;font-weight:600;">🏠 首页</a>
+            <a href="/stats.html">📊 数据统计</a>
+        </nav>
+
+        <div class="container">
+            <!-- 头部 -->
+            <header class="header">
+                <h1>🔗 短链接服务平台</h1>
+                <p class="subtitle">输入长链接，一键生成短链接</p>
+            </header>
+
+            <!-- 输入区 -->
+            <div class="card">
+                <div class="input-group">
+                    <input
+                        v-model="url"
+                        type="url"
+                        placeholder="请输入长链接，例如 https://www.example.com/very/long/path"
+                        class="url-input"
+                        :class="{ error: errorMsg }"
+                        @keyup.enter="shorten"
+                        @focus="errorMsg = ''"
+                    >
+                    <button
+                        class="btn btn-primary"
+                        :disabled="loading"
+                        @click="shorten"
+                    >
+                        <span v-if="loading" class="spinner"></span>
+                        {{ loading ? '生成中...' : '生成短链接' }}
+                    </button>
+                </div>
+                <p v-if="errorMsg" class="error-msg">{{ errorMsg }}</p>
+            </div>
+
+            <!-- 结果区 -->
+            <div v-if="result" class="card result-card">
+                <div class="result-header">✅ 短链接已生成</div>
+                <div class="result-row">
+                    <label>短链接</label>
+                    <div class="copy-row">
+                        <a :href="result.shortUrl" target="_blank" class="short-url">{{ result.shortUrl }}</a>
+                        <button class="btn btn-sm" @click="copy(result.shortUrl)">
+                            {{ copied ? '已复制 ✓' : '复制' }}
+                        </button>
+                    </div>
+                </div>
+                <div class="result-row">
+                    <label>短码</label>
+                    <code class="short-code">{{ result.shortCode }}</code>
+                </div>
+                <div class="result-row">
+                    <label>原始链接</label>
+                    <span class="original-url" :title="result.originalUrl">{{ result.originalUrl }}</span>
+                </div>
+            </div>
+
+            <!-- 底部提示 -->
+            <footer class="footer">
+                <p>短链接格式: <code>http://localhost:8080/{短码}</code></p>
+                <p>访问短链接将自动重定向到原始地址</p>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    url: '',
+                    loading: false,
+                    errorMsg: '',
+                    result: null,
+                    copied: false
+                };
+            },
+            methods: {
+                async shorten() {
+                    this.errorMsg = '';
+                    this.result = null;
+
+                    const url = this.url.trim();
+                    if (!url) {
+                        this.errorMsg = '请输入 URL';
+                        return;
+                    }
+
+                    this.loading = true;
+                    try {
+                        const resp = await fetch('/api/shorten', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url })
+                        });
+                        const data = await resp.json();
+
+                        if (data.success) {
+                            this.result = data;
+                            this.url = '';
+                        } else {
+                            this.errorMsg = data.message || '生成失败，请重试';
+                        }
+                    } catch (e) {
+                        this.errorMsg = '网络错误，请检查服务是否启动';
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async copy(text) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        this.copied = true;
+                        setTimeout(() => this.copied = false, 2000);
+                    } catch {
+                        // 降级方案
+                        const input = document.createElement('input');
+                        input.value = text;
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(input);
+                        this.copied = true;
+                        setTimeout(() => this.copied = false, 2000);
+                    }
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

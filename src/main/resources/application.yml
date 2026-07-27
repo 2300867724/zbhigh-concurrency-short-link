@@ -1,0 +1,94 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: short-link-service
+  profiles:
+    active: h2
+
+  # ==================== Redis（所有 profile 共用） ====================
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+          max-wait: 3000ms
+
+# ==================== 缓存 TTL 配置 ====================
+shortlink:
+  cache:
+    redis-ttl: 604800           # Redis 7 天过期（秒）
+    caffeine-max-size: 10000    # 本地缓存最大条目数
+    caffeine-ttl: 1800          # 本地缓存 30 分钟过期（秒）
+  bloom:
+    expected-insertions: 1000000  # 预期存储 100 万条短链接
+    false-positive-rate: 0.001    # 误判率 0.1%（千分之一）
+  blacklist:
+    domains:
+      - phishing.example.com
+      - spam.example.com
+      - malware.example.org
+
+---
+# ==================== H2 内存数据库（本地开发） ====================
+spring:
+  config:
+    activate:
+      on-profile: h2
+  datasource:
+    url: jdbc:h2:mem:shortlink;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-h2.sql
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+---
+# ==================== MySQL（Docker 部署） ====================
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:shortlink}?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:root123}
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-mysql.sql
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
