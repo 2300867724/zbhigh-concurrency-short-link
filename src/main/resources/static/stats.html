@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据统计 - 短链接服务平台</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f6fa;
+            min-height: 100vh;
+            color: #2d3748;
+        }
+
+        /* 顶部导航 */
+        .navbar {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            padding: 0 24px;
+            display: flex; align-items: center; height: 56px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .navbar a {
+            color: rgba(255,255,255,0.85);
+            text-decoration: none;
+            margin-right: 28px;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        .navbar a:hover, .navbar a.active { color: #fff; }
+        .navbar .brand { font-size: 18px; font-weight: 700; color: #fff; margin-right: 32px; }
+
+        /* 主区域 */
+        .main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+
+        /* 概览卡片 */
+        .card-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 22px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .stat-card .label { font-size: 13px; color: #a0aec0; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; }
+        .stat-card .value.pv { color: #667eea; }
+        .stat-card .value.uv { color: #48bb78; }
+        .stat-card .value.dau { color: #ed8936; }
+        .stat-card .value.links { color: #9f7aea; }
+
+        /* 图表区 */
+        .chart-row {
+            display: grid;
+            grid-template-columns: 1.4fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .chart-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .chart-card h3 { font-size: 16px; margin-bottom: 12px; }
+        .chart-box { width: 100%; height: 360px; }
+
+        /* 加载/错误状态 */
+        .loading-overlay {
+            display: flex; justify-content: center; align-items: center;
+            padding: 40px; color: #a0aec0;
+        }
+        .spinner {
+            width: 32px; height: 32px;
+            border: 3px solid #e2e8f0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin-right: 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .card-row { grid-template-columns: repeat(2, 1fr); }
+            .chart-row { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 480px) {
+            .card-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- 导航 -->
+    <nav class="navbar">
+        <span class="brand">🔗 短链接</span>
+        <a href="/">🏠 首页</a>
+        <a href="/stats.html" class="active">📊 数据统计</a>
+    </nav>
+
+    <div class="main">
+        <!-- 概览卡片 -->
+        <div class="card-row">
+            <div class="stat-card">
+                <div class="label">今日 PV</div>
+                <div class="value pv">{{ fmt(overview.todayPv) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">今日 UV</div>
+                <div class="value uv">{{ fmt(overview.todayUv) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">今日 DAU</div>
+                <div class="value dau">{{ fmt(overview.todayDau) }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">总链接数</div>
+                <div class="value links">{{ fmt(overview.totalLinks) }}</div>
+            </div>
+        </div>
+
+        <!-- 图表 -->
+        <div class="chart-row">
+            <div class="chart-card">
+                <h3>📈 PV / UV 趋势（近 {{ trendDays }} 天）</h3>
+                <div class="chart-box" id="trendChart"></div>
+            </div>
+            <div class="chart-card">
+                <h3>🏆 今日 Top 10</h3>
+                <div class="chart-box" id="topChart"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, onMounted, onBeforeUnmount, nextTick } = Vue;
+
+    createApp({
+        setup() {
+            const overview = ref({ todayPv: 0, todayUv: 0, todayDau: 0, totalLinks: 0 });
+            const trendDays = ref(7);
+            let trendChart = null, topChart = null, timer = null;
+
+            function fmt(n) {
+                if (n == null) return '—';
+                if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+                return n.toLocaleString();
+            }
+
+            async function loadOverview() {
+                try {
+                    const r = await fetch('/api/stats/overview');
+                    if (r.ok) overview.value = await r.json();
+                } catch (e) { /* ignore */ }
+            }
+
+            async function loadTrend() {
+                try {
+                    const r = await fetch('/api/stats/trend?days=' + trendDays.value);
+                    if (!r.ok) return;
+                    const data = await r.json();
+                    if (!trendChart) trendChart = echarts.init(document.getElementById('trendChart'));
+                    trendChart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        legend: { data: ['PV', 'UV'], bottom: 0 },
+                        grid: { left: 50, right: 20, top: 20, bottom: 30 },
+                        xAxis: { type: 'category', data: data.map(d => d.date.slice(5)) },
+                        yAxis: { type: 'value' },
+                        series: [
+                            { name: 'PV', type: 'line', data: data.map(d => d.pv),
+                              smooth: true, lineStyle: { color: '#667eea', width: 2 },
+                              itemStyle: { color: '#667eea' }, areaStyle: { color: 'rgba(102,126,234,0.08)' } },
+                            { name: 'UV', type: 'line', data: data.map(d => d.uv),
+                              smooth: true, lineStyle: { color: '#48bb78', width: 2 },
+                              itemStyle: { color: '#48bb78' }, areaStyle: { color: 'rgba(72,187,120,0.08)' } }
+                        ]
+                    }, { notMerge: true });
+                } catch (e) { /* ignore */ }
+            }
+
+            async function loadTop() {
+                try {
+                    const r = await fetch('/api/stats/top?limit=10');
+                    if (!r.ok) return;
+                    const data = await r.json();
+                    if (!topChart) topChart = echarts.init(document.getElementById('topChart'));
+                    topChart.setOption({
+                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                        grid: { left: 100, right: 30, top: 10, bottom: 10 },
+                        xAxis: { type: 'value' },
+                        yAxis: {
+                            type: 'category',
+                            data: data.map(d => d.shortCode).reverse(),
+                            axisLabel: { fontFamily: 'monospace', fontSize: 13 }
+                        },
+                        series: [{
+                            type: 'bar',
+                            data: data.map(d => d.pv).reverse(),
+                            itemStyle: {
+                                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                    { offset: 0, color: '#667eea' },
+                                    { offset: 1, color: '#764ba2' }
+                                ])
+                            },
+                            barMaxWidth: 32,
+                            label: { show: true, position: 'right', fontSize: 12 }
+                        }]
+                    }, { notMerge: true });
+                } catch (e) { /* ignore */ }
+            }
+
+            async function loadAll() {
+                await Promise.all([loadOverview(), loadTrend(), loadTop()]);
+            }
+
+            onMounted(async () => {
+                await nextTick();
+                await loadAll();
+                timer = setInterval(loadAll, 30000);  // 30 秒自动刷新
+            });
+
+            onBeforeUnmount(() => {
+                if (timer) clearInterval(timer);
+                if (trendChart) trendChart.dispose();
+                if (topChart) topChart.dispose();
+            });
+
+            return { overview, trendDays, fmt };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
