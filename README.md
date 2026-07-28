@@ -1,8 +1,13 @@
 # 🔗 高并发短链接服务平台
 
+[![GitHub stars](https://img.shields.io/github/stars/2300867724/zbhigh-concurrency-short-link?style=flat)](https://github.com/2300867724/zbhigh-concurrency-short-link)
+[![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2.5-6DB33F?logo=springboot)](https://spring.io/projects/spring-boot)
+
 基于 Spring Boot 3 + Redis + Caffeine 的三层缓存架构短链接服务，支持 Bloom Filter 防穿透、漏桶限流、分布式锁、实时统计等高并发场景核心组件。
 
----
+> 🏠 [GitHub](https://github.com/2300867724/zbhigh-concurrency-short-link) · [Gitee](https://gitee.com/zbbc/ZBvibecoding-4)
 
 ## 技术栈
 
@@ -154,8 +159,8 @@ short-link-service/
 ### 方式一：Docker Compose（推荐，MySQL + Redis + App）
 
 ```bash
-git clone git@gitee.com:zbbc/ZBvibecoding-4.git
-cd ZBvibecoding-4
+git clone git@github.com:2300867724/zbhigh-concurrency-short-link.git
+cd zbhigh-concurrency-short-link
 docker compose up -d
 ```
 
