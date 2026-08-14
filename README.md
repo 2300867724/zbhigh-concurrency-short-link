@@ -268,6 +268,57 @@ GET /api/stats/top?limit=10
 
 ---
 
+## 性能基准测试
+
+### 测试环境
+
+| 项目 | 配置 |
+|------|------|
+| 硬件 | Windows 11 单机（本地回环压测） |
+| JDK | Microsoft OpenJDK 17.0.19 |
+| 数据库 | H2 内存模式（本地开发） |
+| Redis | 5.0.14.1（Windows 本地） |
+| 压测工具 | [bombardier](https://github.com/codesenberg/bombardier) v1.2.6 |
+
+### 测试结果
+
+| 接口 | 缓存路径 | 并发 | **QPS** | 平均延迟 | 最大延迟 |
+|------|---------|------|---------|---------|---------|
+| `GET /{短码}` | L1 Caffeine 命中 | 50 | **4,567** | 10.9ms | 35ms |
+| `GET /{短码}` | L1 Caffeine 命中 | 200 | **4,397** | 45.4ms | 103ms |
+| `POST /api/shorten` | 全链路（锁+DB+双写） | 50 | **1,234** | 40.5ms | 2.0s |
+
+### 复现方法
+
+```bash
+# 1. 启动 Redis + 应用（见上方快速启动）
+# 2. 创建测试短码
+curl -X POST http://localhost:8080/api/shorten \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://bench.com/pro"}'
+
+# 3. 预热（填充 Caffeine L1 缓存）
+for i in $(seq 1 50); do curl -s -o /dev/null http://localhost:8080/{短码} & done; wait
+
+# 4. 压测 GET（50 并发 × 10 秒）
+bombardier -c 50 -d 10s http://localhost:8080/{短码}
+
+# 5. 压测 POST（50 并发 × 10 秒）
+bombardier -c 50 -d 10s -m POST \
+  -H "Content-Type: application/json" \
+  -b '{"url":"https://bench.com/p"}' \
+  http://localhost:8080/api/shorten
+```
+
+### 结论
+
+- **读路径 4,400+ QPS**：BloomFilter → Caffeine L1 全内存命中，瓶颈在 Tomcat 线程池/CPU，不在业务逻辑
+- **写路径 1,200+ QPS**：包含漏桶限流、分布式锁、DB 查重/插入、Redis 双写、BloomFilter 更新全套流程
+- POST 最大延迟 2s 为同 URL 压测导致的分布式锁竞争，真实场景不同 URL 互不阻塞
+- 无 Redis 时 GET 约 80 QPS（每次连接超时降级），接入 Redis 后提升 **55 倍**
+
+---
+
 ## 核心设计决策
 
 ### 为什么 Base62 而不是 Base64？
